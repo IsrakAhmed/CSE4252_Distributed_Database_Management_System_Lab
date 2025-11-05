@@ -1,0 +1,134 @@
+# Run New Hadoop Container
+
+docker run -p 9870:9870 -p 8088:8088 -it --name=testHadoop macio232/hadoop-pseudo-distributed-mode
+
+
+
+# Restart Old Hadoop Container
+
+docker container start -i testHadoop
+
+
+
+# onno terminal theke load csv files from local machine to hadoop
+
+docker cp "F:\Study\Academic\address.csv" myhadoop:/tmp/address.csv
+docker cp "F:\Study\Academic\info.csv" myhadoop:/tmp/info.csv
+
+
+
+#  Start Hive
+[Run from: Hadoop Environment In Docker]
+
+hive
+
+
+
+[Run from: Hive Shell - All commands below]
+
+--Create the Exam123 database
+
+CREATE DATABASE Exam123;
+
+
+
+--Switch to use the Exam123 database
+
+USE Exam123;
+
+
+
+# original info123 table
+
+CREATE TABLE Info123 (
+    id BIGINT,
+    name STRING,
+    age INT
+)
+PARTITIONED BY (gender STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION '/DataFold123/info/';
+
+
+
+# original address123 table
+
+CREATE TABLE Address123 (
+    id BIGINT
+)
+PARTITIONED BY (city STRING)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE
+LOCATION '/DataFold123/address/';
+
+
+
+# tmp info123_tmp table
+
+CREATE TABLE Info123_tmp (
+id BIGINT,
+name STRING,
+age INT,
+gender STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+
+# tmp address123_tmp table
+
+CREATE TABLE Address123_tmp (
+id BIGINT,
+city STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+# load csv files into tmp tables from hadoop
+
+LOAD DATA LOCAL INPATH '/tmp/info.csv' INTO TABLE Info123_tmp;
+LOAD DATA LOCAL INPATH '/tmp/address.csv' INTO TABLE Address123_tmp;
+
+
+# set dynamic partitioning
+
+SET hive.exec.dynamic.partition = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+
+
+
+# insert data from Info123_tmp table to original Info123 table
+
+INSERT INTO TABLE Info123 PARTITION (gender)
+SELECT * FROM Info123_tmp;
+
+
+# insert data from Address123_tmp table to original Address123 table
+
+INSERT INTO TABLE Address123 PARTITION (city)
+SELECT * FROM Address123_tmp;
+
+
+
+# show rows from both tables
+
+SELECT * FROM Info123;
+SELECT * FROM Address123;
+
+
+
+# show rows from both tables where gender is Male and city is Dallas
+
+SELECT Info123.id, Info123.name, Info123.age, Info123.gender, Address123.city
+FROM Info123 JOIN Address123
+ON Info123.id = Address123.id
+WHERE gender = "Male" AND city = "Dallas";
+
+

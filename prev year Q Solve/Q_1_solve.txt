@@ -12,6 +12,7 @@ cd data
 
 vi WordCount.java
 
+
 press Insert
 
 
@@ -109,35 +110,40 @@ write wq then Press Enter
 
 
 
+
 javac -classpath $(hadoop classpath) -d . WordCount.java
-jar cf wordcount.jar  WordCount*.class 
+jar cf Count123.jar  WordCount*.class
 
 
-echo "hadoop mapreduce hadoop hadoop bigdata bigdata spark" > input.txt
+
+
+echo "hadoop mapreduce hadoop hadoop bigdata bigdata spark" > ExamData123.txt
 
 
 # Remove old input file from HDFS
-hdfs dfs -rm /input/input.txt
+hdfs dfs -rm /DataFold/ExamData123.txt
 
 
-hdfs dfs -mkdir -p /input
-hdfs dfs -put input.txt /input/
+hdfs dfs -mkdir -p /DataFold
+hdfs dfs -put ExamData123.txt /DataFold/
 hdfs dfs -rm -r /output
-hadoop jar wordcount.jar WordCount /input /output 
+hadoop jar Count123.jar WordCount /DataFold /output 
 hdfs dfs -cat /output/part-r-00000
+
+
 
 
 // to stop docker hadoop container
 docker stop myHadoop
 
 
+
 // to delete any directory
 rm -r directory_name
+
 
 
 // to delete any file
 rm filename.txt
 
 
-// to Drop Database
-DROP DATABASE bankdb CASCADE ;
