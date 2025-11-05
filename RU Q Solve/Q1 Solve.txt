@@ -1,0 +1,264 @@
+# Run New Hadoop Container
+
+docker run -p 9870:9870 -p 8088:8088 -it --name=testHadoop macio232/hadoop-pseudo-distributed-mode
+
+
+
+# Restart Old Hadoop Container
+
+docker container start -i testHadoop
+
+
+
+# Upload CSV Files to Docker Container
+[Run from: Windows Command Prompt In Different Terminal In Docker]
+
+docker cp "F:\Study\Academic\Customer.csv" testHadoop:/tmp/
+docker cp "F:\Study\Academic\Account.csv" testHadoop:/tmp/
+docker cp "F:\Study\Academic\Transaction.csv" testHadoop:/tmp/
+
+
+
+#  Start Hive
+[Run from: Hadoop Environment In Docker]
+
+hive
+
+
+
+[Run from: Hive Shell - All commands below]
+
+--Create the BankDB database
+
+CREATE DATABASE BankDB;
+
+
+--Switch to use the BankDB database
+
+USE BankDB;
+
+
+--Create Customer table that Stores customer information with id, name, and email
+
+CREATE TABLE Customer (
+customer_id BIGINT,
+name STRING,
+email STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+--Create Account table (partitioned by branch_id)
+
+CREATE TABLE Account (
+account_id BIGINT,
+customer_id BIGINT,
+balance DECIMAL(12,2)
+)
+PARTITIONED BY (branch_id INT)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+--Create Transaction table (partitioned by branch_id)
+
+CREATE TABLE Transaction (
+transaction_id BIGINT,
+account_id BIGINT,
+amount DECIMAL(12,2)
+)
+PARTITIONED BY (branch_id INT)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+--Create temporary table for Customer data loading
+
+CREATE TABLE Customer_tmp (
+customer_id BIGINT,
+name STRING,
+email STRING
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+
+--Create temporary table for Account data loading
+
+CREATE TABLE Account_tmp (
+account_id BIGINT,
+customer_id BIGINT,
+balance DECIMAL(12,2),
+branch_id INT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+
+--Create temporary table for Transaction data loading
+
+CREATE TABLE Transaction_tmp (
+transaction_id BIGINT,
+account_id BIGINT,
+amount DECIMAL(12,2),
+branch_id INT
+)
+ROW FORMAT DELIMITED
+FIELDS TERMINATED BY ','
+STORED AS TEXTFILE;
+
+
+
+--Load Customer data from HDFS location into temporary table
+
+ LOAD DATA LOCAL INPATH '/tmp/Customer.csv' INTO TABLE Customer_tmp;
+
+
+
+--Copy all data from temporary table to main Customer table
+
+INSERT INTO TABLE Customer
+SELECT * FROM Customer_tmp;
+
+
+
+--Verify Customer data loaded successfully
+
+SELECT * FROM Customer;
+
+
+
+--Load Account data from HDFS location into temporary table
+
+LOAD DATA LOCAL INPATH '/tmp/Account.csv' INTO TABLE Account_tmp;
+
+
+
+--Enable dynamic partitioning for efficient data insertion
+
+SET hive.exec.dynamic.partition = true;
+SET hive.exec.dynamic.partition.mode = nonstrict;
+
+
+
+
+--Insert data into partitioned Account table
+--Hive automatically creates partitions based on branch_id values
+
+
+INSERT INTO TABLE Account PARTITION (branch_id)
+SELECT account_id, customer_id, balance, branch_id FROM Account_tmp;
+
+
+
+--Verify Account data loaded successfully across partitions
+
+ SELECT * FROM Account;
+
+
+
+--Load Transaction data from HDFS location into temporary table
+
+LOAD DATA LOCAL INPATH '/tmp/Transaction.csv' INTO TABLE Transaction_tmp;
+
+
+--Insert data into partitioned Transaction table
+--Dynamic partitioning creates separate folders for each branch_id
+
+INSERT INTO TABLE Transaction PARTITION (branch_id)
+SELECT transaction_id, account_id, amount, branch_id FROM Transaction_tmp;
+
+
+--Verify Transaction data loaded successfully across partitions
+
+SELECT * FROM Transaction;
+
+
+--Clean up: Drop temporary tables after data migration
+
+DROP TABLE Customer_tmp;
+DROP TABLE Account_tmp;
+DROP TABLE Transaction_tmp;
+
+
+
+
+--Add new empty partition for branch_id=6 to Account table
+--Creates storage location for future branch 6 account data
+
+ALTER TABLE Account ADD IF NOT EXISTS PARTITION (branch_id=6);
+
+
+--Add new empty partition for branch_id=6 to Transaction table
+--Creates storage location for future branch 6 transaction data
+
+ALTER TABLE Transaction ADD IF NOT EXISTS PARTITION (branch_id=6);
+
+
+
+
+--Remove partition for branch_id=3 from Account table
+--Deletes all account data for branch 3 permanently
+
+ALTER TABLE Account DROP IF EXISTS PARTITION (branch_id=3);
+
+
+--Remove partition for branch_id=3 from Transaction table
+--Deletes all transaction data for branch 3 permanently
+
+ALTER TABLE Transaction DROP IF EXISTS PARTITION (branch_id=3);
+
+
+
+--Method 1: Count transactions by branch using GROUP BY--Returns branch_id and count of transactions for each partition
+
+SELECT branch_id, COUNT(*) as transaction_count
+FROM Transaction
+GROUP BY branch_id
+ORDER BY branch_id;
+
+
+
+
+--Method 2: Show all partition names in Transaction table
+--Displays list of existing partitions (e.g., branch_id=1, branch_id=2, ...)
+
+ SHOW PARTITIONS Transaction;
+
+
+
+--Shows column names, data types, and partitioning information
+
+ DESC Transaction
+
+
+
+
+--Insert New Values in account table
+
+INSERT INTO TABLE Account PARTITION (branch_id=6)
+VALUES
+(201, 105, 5000.00),
+(202, 108, 7500.00);
+
+
+
+--Drop Database
+
+DROP DATABASE bankdb CASCADE;
+
+
+
+
+
+ # Stop Hadoop container when finished
+
+docker stop testHadoop
